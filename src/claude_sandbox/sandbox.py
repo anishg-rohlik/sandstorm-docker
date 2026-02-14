@@ -120,7 +120,11 @@ async def run_agent_in_sandbox(request: QueryRequest) -> AsyncGenerator[str, Non
                     on_stdout=lambda data: queue.put_nowait(
                         data if isinstance(data, str) else str(data)
                     ),
-                    on_stderr=lambda data: None,
+                    on_stderr=lambda data: (
+                        queue.put_nowait(json.dumps({"type": "stderr", "data": s}))
+                        if (s := (data if isinstance(data, str) else str(data)).strip())
+                        else None
+                    ),
                 )
             finally:
                 await queue.put(None)
