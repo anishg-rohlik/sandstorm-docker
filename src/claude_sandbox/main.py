@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import uuid
 
 from dotenv import load_dotenv
@@ -21,11 +22,13 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Sandstorm")
 
+cors_origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
