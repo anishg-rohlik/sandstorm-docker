@@ -1,13 +1,16 @@
 import asyncio
 import json
+import logging
 import os
 from collections.abc import AsyncGenerator
 from importlib.resources import files
 from pathlib import Path
 
-from e2b import AsyncSandbox
+from e2b import AsyncSandbox, NotFoundException
 
 from .models import QueryRequest
+
+logger = logging.getLogger(__name__)
 
 # Custom template with Agent SDK pre-installed (built via build_template.py).
 # Falls back to E2B's "claude-code" template + runtime install if custom not found.
@@ -60,8 +63,13 @@ async def run_agent_in_sandbox(request: QueryRequest) -> AsyncGenerator[str, Non
             timeout=request.timeout,
             envs=sandbox_envs,
         )
-    except Exception:
-        # Fall back to default template + runtime install of the SDK
+    except NotFoundException:
+        # Custom template not found — fall back to default template + runtime SDK install
+        logger.warning(
+            "Template %r not found, falling back to %r (adds ~15s overhead)",
+            TEMPLATE,
+            FALLBACK_TEMPLATE,
+        )
         sbx = await AsyncSandbox.create(
             template=FALLBACK_TEMPLATE,
             api_key=request.e2b_api_key,
