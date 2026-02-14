@@ -173,7 +173,7 @@ async def run_agent_in_sandbox(request: QueryRequest) -> AsyncGenerator[str, Non
         try:
             await task
         except Exception:
-            pass
+            logger.warning("Task exception suppressed (runner likely streamed the error)", exc_info=True)
 
     finally:
         await sbx.kill()
