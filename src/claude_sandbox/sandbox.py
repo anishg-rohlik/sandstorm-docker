@@ -38,11 +38,63 @@ _PROVIDER_ENV_KEYS = [
 ]
 
 
+def _validate_sandstorm_config(raw: dict) -> dict:
+    """Validate known sandstorm.json fields, drop invalid ones with warnings."""
+    # Expected field types: field_name -> (allowed types tuple, human description)
+    known_fields: dict[str, tuple[tuple[type, ...], str]] = {
+        "system_prompt": ((str,), "str"),
+        "model": ((str,), "str"),
+        "max_turns": ((int,), "int"),
+        "output_format": ((dict,), "dict"),
+        "agents": ((dict, list), "dict or list"),
+        "mcp_servers": ((dict,), "dict"),
+    }
+
+    validated: dict = {}
+    for key, value in raw.items():
+        if key in known_fields:
+            allowed_types, type_desc = known_fields[key]
+            # Reject booleans masquerading as int (isinstance(True, int) is True)
+            if isinstance(value, bool) and bool not in allowed_types:
+                logger.warning(
+                    "sandstorm.json: field %r should be %s, got bool — skipping",
+                    key,
+                    type_desc,
+                )
+                continue
+            if not isinstance(value, allowed_types):
+                logger.warning(
+                    "sandstorm.json: field %r should be %s, got %s — skipping",
+                    key,
+                    type_desc,
+                    type(value).__name__,
+                )
+                continue
+            validated[key] = value
+        else:
+            logger.warning("sandstorm.json: unknown field %r — ignoring", key)
+
+    return validated
+
+
 def _load_sandstorm_config() -> dict | None:
     """Load sandstorm.json from the project root if it exists."""
-    if _CONFIG_PATH.exists():
-        return json.loads(_CONFIG_PATH.read_text())
-    return None
+    if not _CONFIG_PATH.exists():
+        return None
+
+    try:
+        raw = json.loads(_CONFIG_PATH.read_text())
+    except json.JSONDecodeError as exc:
+        logger.error("sandstorm.json: invalid JSON — %s", exc)
+        return None
+
+    if not isinstance(raw, dict):
+        logger.error(
+            "sandstorm.json: expected a JSON object, got %s", type(raw).__name__
+        )
+        return None
+
+    return _validate_sandstorm_config(raw)
 
 
 async def run_agent_in_sandbox(
