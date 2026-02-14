@@ -21,6 +21,13 @@ class QueryRequest(BaseModel):
     def validate_file_paths(cls, v: dict[str, str] | None) -> dict[str, str] | None:
         if v is None:
             return v
+        if len(v) > 20:
+            raise ValueError(f"Too many files: {len(v)} (max 20)")
+        total_size = sum(len(content.encode()) for content in v.values())
+        if total_size > 10_000_000:  # 10MB
+            raise ValueError(
+                f"Total file size {total_size:,} bytes exceeds 10MB limit"
+            )
         safe = {}
         for path, content in v.items():
             normalized = normpath(path).lstrip("/")
