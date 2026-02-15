@@ -1,6 +1,7 @@
 """Docker-based sandbox implementation."""
 import asyncio
 import logging
+import shlex
 import tarfile
 import io
 from pathlib import Path, PurePosixPath
@@ -28,6 +29,7 @@ class DockerSandbox(SandboxBase):
         self._client: Optional[docker.DockerClient] = None
         self._timeout: int = 300
         self._cleanup_task: Optional[asyncio.Task] = None
+        self._closed = False
 
     async def create(
         self,
@@ -79,9 +81,9 @@ class DockerSandbox(SandboxBase):
                     detach=True,
                     environment=env_vars or {},
                     working_dir="/home/user",
-                    network_mode="bridge",
-                    # Resource limits
-                    cpu_count=int(float(cpu_limit)),  # Convert "2" -> 2
+                    network_mode=limits_config.network_mode,
+                    # Resource limits (1 CPU = 1,000,000,000 nano_cpus)
+                    nano_cpus=int(float(cpu_limit) * 1_000_000_000),
                     mem_limit=memory_limit,
                     # Security
                     read_only=False,  # Need write for /home/user
@@ -127,7 +129,7 @@ class DockerSandbox(SandboxBase):
         result = await loop.run_in_executor(
             None,
             lambda: self.container.exec_run(
-                f"mkdir -p {remote_path}",
+                f"mkdir -p {shlex.quote(remote_path)}",
                 user="root"  # Ensure permissions
             )
         )
@@ -191,15 +193,21 @@ class DockerSandbox(SandboxBase):
         exec_instance = await loop.run_in_executor(
             None,
             lambda: self.container.exec_run(
-                f"cd {cwd} && {command}",
+                f"cd {shlex.quote(cwd)} && {command}",
                 stream=True,
                 demux=True,  # Separate stdout/stderr
                 user="user"
             )
         )
 
-        # Stream output
-        for stdout_chunk, stderr_chunk in exec_instance.output:
+        # Stream output in executor to avoid blocking
+        def _read_chunks():
+            """Generator for reading chunks (runs in thread pool)."""
+            for stdout_chunk, stderr_chunk in exec_instance.output:
+                yield stdout_chunk, stderr_chunk
+
+        # Consume chunks asynchronously
+        for stdout_chunk, stderr_chunk in await loop.run_in_executor(None, list, _read_chunks()):
             if stdout_chunk:
                 yield stdout_chunk.decode('utf-8', errors='replace')
             if stderr_chunk:
@@ -208,6 +216,11 @@ class DockerSandbox(SandboxBase):
 
     async def close(self) -> None:
         """Stop and remove container."""
+        # Prevent double-cleanup
+        if self._closed:
+            return
+        self._closed = True
+
         # Cancel cleanup task if running
         if self._cleanup_task and not self._cleanup_task.done():
             self._cleanup_task.cancel()
