@@ -1,0 +1,36 @@
+# Dockerfile.agent - Docker sandbox environment for Sandstorm agents
+# Mirrors the E2B template environment with Node.js 24, Claude Agent SDK, and system tools
+
+FROM node:24-bookworm-slim
+
+# Install system dependencies to match E2B template
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    ripgrep \
+    python3 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create agent runner directory with proper permissions
+RUN mkdir -p /opt/agent-runner && chmod 777 /opt/agent-runner
+
+# Install Claude Agent SDK globally at specific version to match E2B template
+# Version pinned to match build_template.py
+WORKDIR /opt/agent-runner
+RUN npm init -y && \
+    npm install -g @anthropic-ai/claude-agent-sdk@0.2.42
+
+# Create user and workspace
+RUN useradd -m -s /bin/bash user && \
+    mkdir -p /home/user && \
+    chown -R user:user /home/user
+
+# Set working directory
+WORKDIR /home/user
+
+# Switch to non-root user for security
+USER user
+
+# Keep container running for exec commands
+CMD ["/bin/bash"]

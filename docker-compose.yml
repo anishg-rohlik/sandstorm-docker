@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  sandstorm-api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # API Keys (load from .env file or shell environment)
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+
+      # Sandbox backend configuration
+      - SANDBOX_BACKEND=docker
+
+      # CORS configuration
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+
+      # Optional: Cloud provider configurations
+      - CLAUDE_CODE_USE_VERTEX=${CLAUDE_CODE_USE_VERTEX:-}
+      - CLOUD_ML_REGION=${CLOUD_ML_REGION:-}
+      - ANTHROPIC_VERTEX_PROJECT_ID=${ANTHROPIC_VERTEX_PROJECT_ID:-}
+      - CLAUDE_CODE_USE_BEDROCK=${CLAUDE_CODE_USE_BEDROCK:-}
+      - AWS_REGION=${AWS_REGION:-}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - CLAUDE_CODE_USE_FOUNDRY=${CLAUDE_CODE_USE_FOUNDRY:-}
+      - AZURE_FOUNDRY_RESOURCE=${AZURE_FOUNDRY_RESOURCE:-}
+      - AZURE_API_KEY=${AZURE_API_KEY:-}
+
+    volumes:
+      # Docker socket access (required for DockerSandbox to create containers)
+      - /var/run/docker.sock:/var/run/docker.sock
+
+      # Configuration files (read-only)
+      - ./config:/app/config:ro
+      - ./sandstorm.json:/app/sandstorm.json:ro
+
+    command: ["python", "-m", "sandstorm.cli", "serve", "--host", "0.0.0.0", "--port", "8000"]
+
+    networks:
+      - sandstorm-net
+
+    restart: unless-stopped
+
+networks:
+  sandstorm-net:
+    driver: bridge

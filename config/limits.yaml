@@ -1,0 +1,22 @@
+# Resource limits for Docker sandboxes
+
+# Maximum number of concurrent agent sandboxes
+max_concurrent_agents: 5
+
+# CPU cores allocation per sandbox (can be fractional like "1.5")
+cpu_limit: "2"
+
+# Memory limit per sandbox (supports k, m, g suffixes)
+memory_limit: "4gb"
+
+# Maximum sandbox lifetime in seconds
+session_timeout_seconds: 600
+
+# Docker image name for sandbox containers
+docker_image: "sandstorm-agent:latest"
+
+# Docker network mode (bridge, host, or custom network name)
+network_mode: "bridge"
+
+# Automatically cleanup containers after they stop
+auto_cleanup: true

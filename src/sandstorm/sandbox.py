@@ -1,23 +1,18 @@
+"""Main sandbox orchestration - provider-agnostic (Docker or E2B)."""
 import asyncio
 import json
 import logging
 import os
 import posixpath
-import shlex
 from collections.abc import AsyncGenerator
 from importlib.resources import files
 from pathlib import Path
 
-from e2b import AsyncSandbox, NotFoundException
-
 from .models import QueryRequest
+from .sandbox import DockerSandbox, E2BSandbox
+from .config import LimitsConfig
 
 logger = logging.getLogger(__name__)
-
-# Custom template with Agent SDK pre-installed (built via build_template.py).
-# Falls back to E2B's "claude-code" template + runtime install if custom not found.
-TEMPLATE = "work-43ca/sandstorm"
-FALLBACK_TEMPLATE = "claude-code"
 
 # Load the runner script that executes inside the sandbox
 _RUNNER_SCRIPT = files("sandstorm").joinpath("runner.mjs").read_text()
@@ -120,23 +115,14 @@ def _load_sandstorm_config() -> dict | None:
 async def run_agent_in_sandbox(
     request: QueryRequest, request_id: str = ""
 ) -> AsyncGenerator[str, None]:
-    """Create an E2B sandbox, run the Claude Agent SDK query(), and yield messages."""
-    queue: asyncio.Queue[str | None] = asyncio.Queue(maxsize=10_000)
-    _queue_full_warned = False
+    """
+    Run Claude agent in sandbox (Docker or E2B).
 
-    def _enqueue(data: str) -> None:
-        """Put data on the queue, dropping if full (sync callbacks can't await)."""
-        nonlocal _queue_full_warned
-        try:
-            queue.put_nowait(data)
-        except asyncio.QueueFull:
-            if not _queue_full_warned:
-                logger.warning(
-                    "[%s] Queue full (maxsize=%d), dropping messages — consumer can't keep up",
-                    request_id,
-                    queue.maxsize,
-                )
-                _queue_full_warned = True
+    Yields JSON event lines from agent execution.
+    """
+
+    # Determine sandbox backend from environment variable
+    backend = os.getenv("SANDBOX_BACKEND", "docker").lower()
 
     # Build sandbox env vars: API key + any provider env vars from .env
     sandbox_envs = {}
@@ -179,91 +165,80 @@ async def run_agent_in_sandbox(
             )
         sandbox_envs["GOOGLE_APPLICATION_CREDENTIALS"] = _GCP_CREDENTIALS_SANDBOX_PATH
 
+    # Load sandstorm.json configuration
     sandstorm_config = _load_sandstorm_config() or {}
 
-    logger.info("[%s] Creating sandbox template=%s", request_id, TEMPLATE)
+    # Instantiate appropriate sandbox backend
+    if backend == "e2b":
+        logger.info("[%s] Creating E2B sandbox", request_id)
+        sandbox = E2BSandbox(api_key=request.e2b_api_key)
+    else:
+        logger.info("[%s] Creating Docker sandbox", request_id)
+        config = LimitsConfig.load()
+        sandbox = DockerSandbox(image=config.docker_image)
 
     try:
-        sbx = await AsyncSandbox.create(
-            template=TEMPLATE,
-            api_key=request.e2b_api_key,
+        # Create sandbox with environment variables
+        await sandbox.create(
             timeout=request.timeout,
-            envs=sandbox_envs,
-        )
-    except NotFoundException:
-        # Custom template not found — fall back to default template + runtime SDK install
-        logger.warning(
-            "[%s] Template %r not found, falling back to %r (adds ~15s overhead)",
-            request_id,
-            TEMPLATE,
-            FALLBACK_TEMPLATE,
-        )
-        sbx = await AsyncSandbox.create(
-            template=FALLBACK_TEMPLATE,
-            api_key=request.e2b_api_key,
-            timeout=request.timeout,
-            envs=sandbox_envs,
-        )
-        await sbx.commands.run(
-            "mkdir -p /opt/agent-runner"
-            " && cd /opt/agent-runner"
-            " && npm init -y"
-            # Pin SDK version to match build_template.py
-            " && npm install @anthropic-ai/claude-agent-sdk@0.2.42",
-            timeout=120,
+            env_vars=sandbox_envs
         )
 
-    logger.info("[%s] Sandbox created: %s", request_id, sbx.sandbox_id)
-
-    task = None
-    try:
         # Write Claude Agent SDK settings to the sandbox
         settings = {
             "permissions": {"allow": [], "deny": []},
             "env": {"CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"},
         }
-        await sbx.commands.run("mkdir -p /home/user/.claude", timeout=5)
-        await sbx.files.write(
-            "/home/user/.claude/settings.json",
-            json.dumps(settings, indent=2),
+        await sandbox.mkdir("/home/user/.claude")
+        await sandbox.upload_file(
+            local_path=None,
+            remote_path="/home/user/.claude/settings.json",
+            content=json.dumps(settings, indent=2)
         )
 
         # Upload GCP credentials to the sandbox if Vertex AI is configured
         if gcp_creds_content:
             logger.info("[%s] Uploading GCP credentials to sandbox", request_id)
-            await sbx.commands.run(
-                f"mkdir -p {posixpath.dirname(_GCP_CREDENTIALS_SANDBOX_PATH)}",
-                timeout=5,
+            await sandbox.mkdir(posixpath.dirname(_GCP_CREDENTIALS_SANDBOX_PATH))
+            await sandbox.upload_file(
+                local_path=None,
+                remote_path=_GCP_CREDENTIALS_SANDBOX_PATH,
+                content=gcp_creds_content
             )
-            await sbx.files.write(_GCP_CREDENTIALS_SANDBOX_PATH, gcp_creds_content)
 
-        # Upload user files to the sandbox (path traversal prevented by model validation)
+        # Upload user files to the sandbox
         if request.files:
             logger.info("[%s] Uploading %d files", request_id, len(request.files))
-            # Collect parent dirs that need creation (deduplicate, skip top-level files)
+            # Create parent directories for all files
             dirs_to_create: set[str] = set()
             for path in request.files:
                 parent = posixpath.dirname(path)
                 if parent:  # non-empty means nested path like "src/main.py"
                     dirs_to_create.add(f"/home/user/{parent}")
 
-            if dirs_to_create:
-                mkdir_cmd = " && ".join(
-                    f"mkdir -p {shlex.quote(d)}" for d in sorted(dirs_to_create)
-                )
-                await sbx.commands.run(mkdir_cmd, timeout=10)
+            for dir_path in sorted(dirs_to_create):
+                await sandbox.mkdir(dir_path)
 
+            # Upload all files
             for path, content in request.files.items():
                 sandbox_path = f"/home/user/{path}"
                 try:
-                    await sbx.files.write(sandbox_path, content)
+                    await sandbox.upload_file(
+                        local_path=None,
+                        remote_path=sandbox_path,
+                        content=content
+                    )
                 except Exception as exc:
                     raise RuntimeError(
                         f"Failed to upload file {path!r} to sandbox: {exc}"
                     ) from exc
 
         # Upload runner script
-        await sbx.files.write("/opt/agent-runner/runner.mjs", _RUNNER_SCRIPT)
+        await sandbox.upload_file(
+            local_path=None,
+            remote_path="/opt/agent-runner/runner.mjs",
+            content=_RUNNER_SCRIPT
+        )
 
         # Build agent config: sandstorm.json (base) + request overrides
         agent_config = {
@@ -278,64 +253,40 @@ async def run_agent_in_sandbox(
             "agents": sandstorm_config.get("agents"),
             "mcp_servers": sandstorm_config.get("mcp_servers"),
         }
-        await sbx.files.write(
-            "/opt/agent-runner/agent_config.json", json.dumps(agent_config)
+        await sandbox.upload_file(
+            local_path=None,
+            remote_path="/opt/agent-runner/agent_config.json",
+            content=json.dumps(agent_config)
         )
 
         # Run the SDK query() via the runner script
         logger.info(
-            "[%s] Starting agent (model=%s, max_turns=%s)",
+            "[%s] Starting agent (backend=%s, model=%s, max_turns=%s)",
             request_id,
+            backend,
             agent_config.get("model"),
             agent_config.get("max_turns"),
         )
 
-        async def run_command():
-            try:
-                await sbx.commands.run(
-                    "node /opt/agent-runner/runner.mjs",
-                    timeout=1800,
-                    on_stdout=lambda data: _enqueue(
-                        data if isinstance(data, str) else str(data)
-                    ),
-                    on_stderr=lambda data: (
-                        _enqueue(json.dumps({"type": "stderr", "data": s}))
-                        if (s := (data if isinstance(data, str) else str(data)).strip())
-                        else None
-                    ),
-                )
-            finally:
-                await queue.put(None)
-
-        task = asyncio.create_task(run_command())
-
-        # Yield messages from queue until the process ends
-        while True:
-            line = await queue.get()
-            if line is None:
-                break
-            line = line.strip()
+        # Execute runner and stream output
+        command = "node --no-warnings /opt/agent-runner/runner.mjs"
+        async for output_line in sandbox.run_command(command, cwd="/home/user"):
+            line = output_line.strip()
             if line:
                 yield line
 
+        logger.info("[%s] Agent completed successfully", request_id)
+
+    except asyncio.CancelledError:
+        logger.warning("[%s] Request cancelled", request_id)
+        raise
+    except Exception as e:
+        logger.error("[%s] Sandbox error: %s", request_id, e)
+        yield json.dumps({
+            "type": "error",
+            "error": str(e),
+            "request_id": request_id
+        })
     finally:
-        # Cancel the background command task before destroying the sandbox.
-        # task may be None if an error occurred before create_task().
-        if task is not None and not task.done():
-            task.cancel()
-            try:
-                await task
-            except (asyncio.CancelledError, Exception):
-                pass
-        elif task is not None:
-            # Task finished — suppress any command exit exception
-            try:
-                task.result()
-            except Exception:
-                logger.warning(
-                    "[%s] Task exception suppressed (runner likely streamed the error)",
-                    request_id,
-                    exc_info=True,
-                )
-        logger.info("[%s] Destroying sandbox %s", request_id, sbx.sandbox_id)
-        await sbx.kill()
+        # Always cleanup sandbox
+        await sandbox.close()

@@ -62,9 +62,11 @@ class QueryRequest(BaseModel):
                 "anthropic_api_key is required — pass it in the request body "
                 "or set ANTHROPIC_API_KEY in the environment"
             )
-        if not self.e2b_api_key:
+        # E2B_API_KEY only required when using E2B backend
+        sandbox_backend = os.environ.get("SANDBOX_BACKEND", "docker").lower()
+        if sandbox_backend == "e2b" and not self.e2b_api_key:
             raise ValueError(
-                "e2b_api_key is required — pass it in the request body "
-                "or set E2B_API_KEY in the environment"
+                "e2b_api_key is required when SANDBOX_BACKEND=e2b — "
+                "pass it in the request body or set E2B_API_KEY in the environment"
             )
         return self

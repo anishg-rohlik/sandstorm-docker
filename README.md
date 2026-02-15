@@ -1,45 +1,56 @@
-# Sandstorm
+# Sandstorm-Docker
 
-Run AI agents in secure cloud sandboxes. One command. Zero infrastructure.
+Run AI agents in secure local Docker sandboxes. One command. Zero cloud dependencies.
 
 [![Claude Agent SDK](https://img.shields.io/badge/Claude_Agent_SDK-black?logo=anthropic)](https://docs.anthropic.com/en/docs/agents-and-tools/claude-agent-sdk)
-[![E2B](https://img.shields.io/badge/E2B-sandboxed-ff8800.svg)](https://e2b.dev)
+[![Docker](https://img.shields.io/badge/Docker-sandboxed-2496ED.svg?logo=docker)](https://www.docker.com)
 [![OpenRouter](https://img.shields.io/badge/OpenRouter-300%2B_models-6366f1.svg)](https://openrouter.ai)
-[![PyPI](https://img.shields.io/pypi/v/duvo-sandstorm.svg)](https://pypi.org/project/duvo-sandstorm/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Hundreds of AI agents running in parallel. Hours-long tasks. Tool use, file access, structured output — each in its own secure sandbox. Sounds hard. It's not.**
+**Hundreds of AI agents running in parallel. Hours-long tasks. Tool use, file access, structured output — each in its own secure Docker container. Fully local. No cloud dependencies.**
 
 ```bash
-ds "Fetch all our webpages from git, analyze each for SEO and GEO, optimize them, and push the changes back"
+ds "Fetch all our webpages from git, analyze each for SEO, optimize them, and push the changes back"
 ```
 
-That's it. Sandstorm wraps the [Claude Agent SDK](https://docs.anthropic.com/en/docs/agents-and-tools/claude-agent-sdk) in isolated [E2B](https://e2b.dev) cloud sandboxes — the agent installs packages, fetches live data, generates files, and streams every step back via SSE. When it's done, the sandbox is destroyed. Nothing persists. Nothing escapes.
+That's it. Sandstorm-Docker wraps the [Claude Agent SDK](https://docs.anthropic.com/en/docs/agents-and-tools/claude-agent-sdk) in isolated Docker containers — the agent installs packages, fetches live data, generates files, and streams every step back via SSE. When it's done, the container is destroyed. Nothing persists. Nothing escapes.
 
-### Why Sandstorm?
+**This is a public fork of [sandstorm](https://github.com/tomascupr/sandstorm) that replaces E2B cloud dependency with local Docker sandboxes.**
 
-Most companies want to use AI agents but hit the same wall: infrastructure, security concerns, and complexity. Sandstorm removes all three. It's a simplified, open-source version of the agent runtime we built at [duvo.ai](https://duvo.ai) — battle-tested in production.
+### Why Sandstorm-Docker?
 
-- **Any model via OpenRouter** -- swap in DeepSeek R1, Qwen 3, Kimi K2, or any of 300+ models through [OpenRouter](https://openrouter.ai)
-- **Full agent power** -- Bash, Read, Write, Edit, Glob, Grep, WebSearch, WebFetch -- all enabled by default
-- **Safe by design** -- every request gets a fresh VM that's destroyed after, with zero state leakage
-- **Real-time streaming** -- watch the agent work step-by-step via SSE, not just the final answer
-- **Configure once, query forever** -- drop a `sandstorm.json` for structured output, subagents, MCP servers, and system prompts
+Most companies want to use AI agents but hit the same wall: cloud dependencies, costs, and complexity. Sandstorm-Docker removes all three. It's a fork of the agent runtime from [duvo.ai](https://duvo.ai) — adapted for fully local deployment.
+
+- **Fully Local** -- no cloud sandbox service required, runs entirely on your machine or server
+- **Free** -- no per-agent costs (E2B charges $0.05-0.20 per agent), just your Anthropic API usage
+- **Fast** -- 1-2s cold start vs 5-8s with E2B cloud sandboxes
+- **Resource Limits** -- configure max concurrent agents, CPU, memory, and session timeouts
+- **Any model via OpenRouter** -- swap in DeepSeek R1, Qwen 3, Kimi K2, or any of 300+ models
+- **Full agent power** -- Bash, Read, Write, Edit, Glob, Grep, WebSearch, WebFetch -- all enabled
+- **Safe by design** -- every request gets a fresh container with security hardening
+- **Real-time streaming** -- watch the agent work step-by-step via SSE
+- **Configure once, query forever** -- drop a `sandstorm.json` for structured output, subagents, MCP servers
 - **File uploads** -- send code, data, or configs for the agent to work with
+- **E2B Compatible** -- optional fallback to E2B cloud sandboxes if needed
 
 ### Get Started
 
 ```bash
+# Install
 pip install duvo-sandstorm
+
+# Build agent Docker image (one-time)
+docker build -f Dockerfile.agent -t sandstorm-agent:latest .
+
+# Set API key (no E2B needed!)
 export ANTHROPIC_API_KEY=sk-ant-...
-export E2B_API_KEY=e2b_...
-ds "Find the top 10 trending Python repos on GitHub and summarize each in one sentence"
+
+# Run your first agent
+ds "Find the top 10 trending Python repos on GitHub and summarize each"
 ```
 
-If Sandstorm is useful, consider giving it a [star](https://github.com/tomascupr/sandstorm) — it helps others find it.
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Ftomascupr%2Fsandstorm&env=ANTHROPIC_API_KEY,E2B_API_KEY)
+If Sandstorm-Docker is useful, consider giving it a [star](https://github.com/anishg-rohlik/sandstorm-docker) — it helps others find it.
 
 ## Table of Contents
 
@@ -47,20 +58,22 @@ If Sandstorm is useful, consider giving it a [star](https://github.com/tomascupr
 - [CLI](#cli)
 - [How It Works](#how-it-works)
 - [Features](#features)
+- [Resource Limits](#resource-limits)
 - [OpenRouter](#openrouter)
 - [Configuration](#configuration)
 - [API Reference](#api-reference)
 - [Client Examples](#client-examples)
 - [Deployment](#deployment)
+- [Docker vs E2B](#docker-vs-e2b)
 - [Security](#security)
-- [Releasing](#releasing)
+- [Troubleshooting](#troubleshooting)
 
 ## Quickstart
 
 ### Prerequisites
 
 - Python 3.11+
-- [E2B](https://e2b.dev) API key
+- Docker installed and running
 - [Anthropic](https://console.anthropic.com) API key or [OpenRouter](https://openrouter.ai) API key
 - [uv](https://docs.astral.sh/uv/) (only for source installs)
 
@@ -71,17 +84,29 @@ If Sandstorm is useful, consider giving it a [star](https://github.com/tomascupr
 pip install duvo-sandstorm
 
 # Or from source
-git clone https://github.com/tomascupr/sandstorm.git
-cd sandstorm
+git clone https://github.com/anishg-rohlik/sandstorm-docker.git
+cd sandstorm-docker
 uv sync
 ```
+
+### Build Agent Image
+
+The agent runtime environment needs to be built once:
+
+```bash
+docker build -f Dockerfile.agent -t sandstorm-agent:latest .
+```
+
+This creates a Docker image with:
+- Node.js 24
+- Claude Agent SDK v0.2.42
+- System tools (curl, git, ripgrep, python3)
 
 ### Setup
 
 ```bash
-# Set your API keys
+# Set your API key
 export ANTHROPIC_API_KEY=sk-ant-...
-export E2B_API_KEY=e2b_...
 
 # Run your first agent
 ds "Create hello.py that prints a colorful greeting and run it"
@@ -90,505 +115,567 @@ ds "Create hello.py that prints a colorful greeting and run it"
 ds serve
 ```
 
-### E2B Sandbox Template
-
-Sandstorm ships with a public pre-built template (`work-43ca/sandstorm`) that's used automatically — no build step needed. The template includes Node.js 24, `@anthropic-ai/claude-agent-sdk`, Python 3, git, ripgrep, and curl.
-
-To customize the template (e.g. add system packages or pre-install other dependencies), edit `build_template.py` and rebuild:
-
-```bash
-uv run python build_template.py
-```
-
 ## CLI
 
-After installing, the `duvo-sandstorm` (or `ds`) command is available:
+Sandstorm provides two main commands:
 
-### Run an agent
-
-The `query` command is the default — just pass a prompt directly:
+### `ds query` - Run a one-off agent
 
 ```bash
-ds "Create hello.py and run it"
-ds "Analyze this repo" --model opus
-ds "Build a chart" --max-turns 30 --timeout 600
-ds "Fetch data" --json-output | jq '.type'
+# Basic usage
+ds "your prompt here"
+
+# With options
+ds "analyze this code" \
+  --model opus \
+  --max-turns 50 \
+  --timeout 600 \
+  -f src/main.py \
+  -f tests/test_main.py
+
+# Upload files
+ds "fix the bug" -f broken_file.py
+
+# Different model
+ds "explain this" --model haiku -f code.py
 ```
 
-The explicit `query` subcommand also works: `ds query "Create hello.py"`.
+**Options:**
+- `--model` - Model to use (sonnet, opus, haiku)
+- `--max-turns` - Maximum agent turns (default: unlimited)
+- `--timeout` - Timeout in seconds (5-3600, default: 300)
+- `-f, --file` - Upload file(s) to sandbox (repeatable)
+- `--anthropic-key` - Override ANTHROPIC_API_KEY
+- `--openrouter-key` - Override OPENROUTER_API_KEY
+- `--raw` - Output raw JSON instead of formatted messages
 
-### Upload files
-
-Use `-f` / `--file` to send local files into the sandbox (repeatable):
-
-```bash
-ds "Analyze this data and find outliers" -f data.csv
-ds "Compare these configs" -f prod.json -f staging.json
-ds "Review this code for bugs" -f src/main.py -f src/utils.py
-```
-
-Files are uploaded to `/home/user/{filename}` before the agent starts. Only text files are supported; binary files must be sent via the [API](#file-uploads) instead.
-
-### Start the server
+### `ds serve` - Start API server
 
 ```bash
-ds serve                    # default: 0.0.0.0:8000
-ds serve --port 3000        # custom port
-ds serve --reload           # auto-reload for development
-```
+# Start server
+ds serve
 
-### API keys
+# Custom host/port
+ds serve --host 0.0.0.0 --port 8080
 
-Keys are resolved in order: CLI flags > environment variables > `.env` file in current directory.
-
-```bash
-# Environment variables (most common)
-export ANTHROPIC_API_KEY=sk-ant-...
-export E2B_API_KEY=e2b_...
-
-# Or CLI flags
-ds "hello" --anthropic-api-key sk-ant-... --e2b-api-key e2b_...
+# Development mode (auto-reload)
+ds serve --reload
 ```
 
 ## How It Works
 
 ```
-Client --POST /query--> FastAPI --> E2B Sandbox (isolated VM)
-  <---- SSE stream <---- stdout <-- runner.mjs --> query() from Agent SDK
-                                     |-- Bash, Read, Write, Edit
-                                     |-- Glob, Grep, WebSearch, WebFetch
-                                     '-- subagents, MCP servers, structured output
+Client Request
+    ↓
+Sandstorm API/CLI
+    ↓
+Docker Container Created
+    ├─ Node.js 24 + Claude Agent SDK
+    ├─ Python 3 + system tools
+    ├─ User files uploaded
+    └─ Environment variables set
+    ↓
+Agent Executes (runner.mjs)
+    ├─ Runs commands
+    ├─ Reads/writes files
+    ├─ Makes web requests
+    └─ Streams output as JSON
+    ↓
+Container Destroyed
+    ↓
+Results Returned
 ```
 
-1. Your app sends a prompt to `POST /query`
-2. Sandstorm creates a fresh E2B sandbox with the Claude Agent SDK pre-installed
-3. The agent runs your prompt with full tool access inside the sandbox
-4. Every agent message (thoughts, tool calls, results) streams back as SSE events
-5. The sandbox is destroyed when done -- nothing persists
+**Security:** Each container runs with:
+- Minimal capabilities (CAP_DROP ALL)
+- No new privileges allowed
+- Resource limits (CPU, memory)
+- Auto-cleanup after session timeout
+- Network isolation
 
 ## Features
 
+### Real-time Streaming
+
+Watch the agent work step-by-step:
+
+```bash
+ds "Build a web scraper and test it on example.com"
+
+# Output streams live:
+# {"type":"tool_use","name":"write","path":"scraper.py"...}
+# {"type":"bash","command":"python scraper.py"...}
+# {"type":"result","success":true...}
+```
+
+### File Upload
+
+```bash
+# Upload single file
+ds "fix the bug" -f broken.py
+
+# Upload multiple files
+ds "refactor these" -f src/a.py -f src/b.py -f tests/test.py
+
+# Files land in /home/user/ in the container
+```
+
 ### Structured Output
 
-Configure in `sandstorm.json` to get validated JSON instead of free-form text:
+Configure output format in `sandstorm.json`:
 
 ```json
 {
+  "system_prompt": "Be concise",
+  "model": "sonnet",
   "output_format": {
     "type": "json_schema",
     "schema": {
       "type": "object",
       "properties": {
-        "companies": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": { "type": "string" },
-              "funding_total": { "type": "number" },
-              "sector": { "type": "string" },
-              "url": { "type": "string" }
-            },
-            "required": ["name", "funding_total", "sector"]
-          }
-        },
-        "files_created": {
-          "type": "array",
-          "items": { "type": "string" }
-        }
+        "summary": {"type": "string"},
+        "files_created": {"type": "array", "items": {"type": "string"}},
+        "success": {"type": "boolean"}
       },
-      "required": ["companies", "files_created"]
+      "required": ["summary", "files_created", "success"]
     }
   }
 }
 ```
 
-The agent works normally (scrapes data, installs packages, writes files), then returns validated JSON in `result.structured_output`.
-
 ### Subagents
 
-Define specialized agents in `sandstorm.json` that the main agent can delegate to:
+Define specialized agents in `sandstorm.json`:
 
 ```json
 {
   "agents": {
-    "scraper": {
-      "description": "Crawls websites and saves structured data to disk.",
-      "prompt": "Scrape the target, extract data, and save as JSON to /home/user/output/.",
-      "tools": ["Bash", "WebFetch", "Write", "Read"],
-      "model": "sonnet"
+    "python-expert": {
+      "system_prompt": "You are a Python expert. Write clean, idiomatic code with type hints.",
+      "model": "opus"
     },
-    "report-writer": {
-      "description": "Reads collected data and produces formatted reports.",
-      "prompt": "Read all data files, synthesize findings, and generate a PDF report with charts.",
-      "tools": ["Bash", "Read", "Write", "Glob"]
+    "tester": {
+      "system_prompt": "You write comprehensive pytest tests.",
+      "model": "sonnet"
     }
   }
 }
 ```
 
-The main agent spawns subagents via the `Task` tool when it decides they're needed.
-
-### File Uploads
-
-Send files in the request for the agent to work with:
-
-```bash
-curl -N -X POST https://your-sandstorm-host/query \
-  -d '{
-    "prompt": "Parse these server logs, find error spikes, and write an incident report",
-    "files": {
-      "logs/app.log": "2024-01-15T10:23:01Z ERROR [auth] connection pool exhausted\n...",
-      "logs/deploys.json": "[{\"sha\": \"a1b2c3\", \"ts\": \"2024-01-15T10:20:00Z\"}]"
-    }
-  }'
-```
-
-Files are written to `/home/user/{path}` in the sandbox before the agent starts. From the CLI, use `-f` / `--file` instead (see [Upload files](#upload-files)).
-
 ### MCP Servers
 
-Attach external tools via [MCP](https://modelcontextprotocol.io) in `sandstorm.json`:
+Integrate Model Context Protocol servers:
 
 ```json
 {
   "mcp_servers": {
-    "sqlite": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-sqlite", "/home/user/data.db"]
+    "filesystem": {
+      "type": "stdio",
+      "command": "mcp-server-filesystem",
+      "args": ["/path/to/workspace"]
     },
-    "remote-api": {
+    "github": {
       "type": "sse",
-      "url": "https://api.example.com/mcp/sse",
-      "headers": { "Authorization": "Bearer your-token" }
+      "url": "http://localhost:3000/mcp"
     }
   }
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `type` | `string` | `"stdio"`, `"http"`, or `"sse"` |
-| `command` | `string` | Command for stdio servers |
-| `args` | `string[]` | Command arguments |
-| `url` | `string` | URL for HTTP/SSE servers |
-| `headers` | `object` | Auth headers for remote servers |
-| `env` | `object` | Environment variables |
+## Resource Limits
+
+Configure limits in `config/limits.yaml`:
+
+```yaml
+# Maximum concurrent agent containers
+max_concurrent_agents: 5
+
+# CPU cores per container
+cpu_limit: "2"
+
+# Memory limit per container
+memory_limit: "4gb"
+
+# Maximum container lifetime (seconds)
+session_timeout_seconds: 600
+
+# Docker image to use
+docker_image: "sandstorm-agent:latest"
+```
+
+When the concurrent limit is reached, new requests will error until existing agents complete.
 
 ## OpenRouter
 
-Sandstorm works with any model available on [OpenRouter](https://openrouter.ai) -- not just Claude. Run agents powered by GPT-4o, Qwen, Llama, DeepSeek, Gemini, Mistral, or any of 300+ models, all through the same API.
-
-### Setup
-
-Add three env vars to `.env`:
+Use 300+ models from DeepSeek, Qwen, Kimi, and more:
 
 ```bash
-ANTHROPIC_BASE_URL=https://openrouter.ai/api
-OPENROUTER_API_KEY=sk-or-...
-ANTHROPIC_DEFAULT_SONNET_MODEL=anthropic/claude-sonnet-4  # or any OpenRouter model ID
+export ANTHROPIC_BASE_URL=https://openrouter.ai/api/v1
+export OPENROUTER_API_KEY=sk-or-...
+export ANTHROPIC_DEFAULT_SONNET_MODEL=anthropic/claude-sonnet-4
+
+ds "your query"
 ```
-
-That's it. The agent now routes through OpenRouter. Your existing `ANTHROPIC_API_KEY` can stay in `.env` -- Sandstorm automatically clears it in the sandbox when OpenRouter is active.
-
-### Using Open-Source Models
-
-Remap the SDK's model aliases to any OpenRouter model:
-
-```bash
-# Route "sonnet" to Qwen
-ANTHROPIC_DEFAULT_SONNET_MODEL=qwen/qwen3-max-thinking
-
-# Route "opus" to DeepSeek
-ANTHROPIC_DEFAULT_OPUS_MODEL=deepseek/deepseek-r1
-
-# Route "haiku" to a fast, cheap model
-ANTHROPIC_DEFAULT_HAIKU_MODEL=qwen/qwen3-30b-a3b
-```
-
-Then use the alias in your request or `sandstorm.json`:
-
-```bash
-curl -N -X POST http://localhost:8000/query \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "Analyze this CSV and build a chart", "model": "sonnet"}'
-```
-
-The agent runs on Qwen, DeepSeek, or whatever you mapped -- with full tool use, file access, and streaming.
-
-### Per-Request Keys
-
-Pass `openrouter_api_key` in the request body for multi-tenant setups:
-
-```bash
-curl -N -X POST http://localhost:8000/query \
-  -d '{"prompt": "...", "openrouter_api_key": "sk-or-...", "model": "sonnet"}'
-```
-
-### How It Works
-
-The Claude Agent SDK supports custom API endpoints via `ANTHROPIC_BASE_URL`. OpenRouter exposes an Anthropic-compatible API, so the SDK sends requests to OpenRouter instead of Anthropic directly. OpenRouter then routes to whatever model you've configured. The `ANTHROPIC_DEFAULT_*_MODEL` env vars tell the SDK which model ID to send when you use aliases like `sonnet` or `opus`.
-
-### Compatibility
-
-Most models on OpenRouter support the core agent capabilities (tool use, streaming, multi-turn). Models with strong tool-use support (Claude, GPT-4o, Qwen, DeepSeek) work best. Smaller or older models may struggle with complex tool chains.
-
-Browse available models at [openrouter.ai/models](https://openrouter.ai/models).
 
 ## Configuration
 
-Sandstorm uses a two-layer config system:
+### sandstorm.json
 
-| Layer | What it controls | How to set |
-|-------|-----------------|------------|
-| **`sandstorm.json`** | Agent behavior -- system prompt, structured output, subagents, MCP servers | Config file in project root |
-| **API request** | Per-call -- prompt, model, files, timeout | JSON body on `POST /query` |
-
-### `sandstorm.json`
-
-Drop a `sandstorm.json` in your project root to configure the agent's behavior:
+Drop a `sandstorm.json` in your project root:
 
 ```json
 {
-  "system_prompt": "You are a due diligence analyst. Write reports to /home/user/output/.",
+  "system_prompt": "Be concise and prefer Python 3.11+",
   "model": "sonnet",
-  "max_turns": 20
+  "max_turns": 30,
+  "output_format": {
+    "type": "json_schema",
+    "schema": {...}
+  },
+  "agents": {...},
+  "mcp_servers": {...}
 }
 ```
 
-See [Structured Output](#structured-output), [Subagents](#subagents), and [MCP Servers](#mcp-servers) for advanced configuration.
+### Environment Variables
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `system_prompt` | `string` | Custom instructions for the agent |
-| `model` | `string` | Default model (`"sonnet"`, `"opus"`, `"haiku"`, or full ID) |
-| `max_turns` | `integer` | Maximum conversation turns |
-| `output_format` | `object` | JSON schema for [structured output](#structured-output) |
-| `agents` | `object` | [Subagent](#subagents) definitions |
-| `mcp_servers` | `object` | [MCP server](#mcp-servers) configurations |
+**Required:**
+- `ANTHROPIC_API_KEY` - Your Anthropic API key
 
-### API Keys
+**Optional:**
+- `ANTHROPIC_BASE_URL` - Custom API endpoint (e.g., OpenRouter)
+- `OPENROUTER_API_KEY` - OpenRouter API key
+- `SANDBOX_BACKEND` - Sandbox backend (default: "docker", or "e2b")
+- `CORS_ORIGINS` - CORS origins (default: "*")
 
-Keys can live in `.env` (set once) or be passed per-request (multi-tenant). Request body overrides `.env`.
-
-```bash
-# .env -- set once, forget about it
-ANTHROPIC_API_KEY=sk-ant-...
-E2B_API_KEY=e2b_...
-
-# Then just send prompts:
-curl -N -X POST https://your-sandstorm-host/query \
-  -d '{"prompt": "Crawl docs.stripe.com/api and generate an OpenAPI spec as YAML"}'
-
-# Or override per-request:
-curl -N -X POST https://your-sandstorm-host/query \
-  -d '{"prompt": "...", "anthropic_api_key": "sk-ant-other", "e2b_api_key": "e2b_other"}'
-```
-
-### Providers
-
-Sandstorm supports Anthropic (default), Google Vertex AI, Amazon Bedrock, Microsoft Azure, [OpenRouter](#openrouter), and custom API proxies. Add the env vars to `.env` and restart -- the SDK detects them automatically.
-
-| Provider | Key env vars |
-|----------|-------------|
-| **Anthropic** (default) | `ANTHROPIC_API_KEY` |
-| **[OpenRouter](#openrouter)** | `ANTHROPIC_BASE_URL`, `OPENROUTER_API_KEY` (see [OpenRouter](#openrouter)) |
-| **Vertex AI** | `CLAUDE_CODE_USE_VERTEX=1`, `CLOUD_ML_REGION`, `ANTHROPIC_VERTEX_PROJECT_ID` |
-| **Bedrock** | `CLAUDE_CODE_USE_BEDROCK=1`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
-| **Azure** | `CLAUDE_CODE_USE_FOUNDRY=1`, `AZURE_FOUNDRY_RESOURCE`, `AZURE_API_KEY` |
-| **Custom proxy** | `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` (optional) |
+**Cloud Providers:**
+- Vertex AI: `CLAUDE_CODE_USE_VERTEX`, `CLOUD_ML_REGION`, `ANTHROPIC_VERTEX_PROJECT_ID`, `GOOGLE_APPLICATION_CREDENTIALS`
+- Bedrock: `CLAUDE_CODE_USE_BEDROCK`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+- Azure: `CLAUDE_CODE_USE_FOUNDRY`, `AZURE_FOUNDRY_RESOURCE`, `AZURE_API_KEY`
 
 ## API Reference
 
-### `POST /query`
+### POST /query
 
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `prompt` | `string` | Yes | -- | The task for the agent (min 1 char) |
-| `anthropic_api_key` | `string` | No | `$ANTHROPIC_API_KEY` | Anthropic key (falls back to env) |
-| `openrouter_api_key` | `string` | No | `$OPENROUTER_API_KEY` | OpenRouter key (falls back to env) |
-| `e2b_api_key` | `string` | No | `$E2B_API_KEY` | E2B key (falls back to env) |
-| `model` | `string` | No | from config | Overrides `sandstorm.json` model |
-| `max_turns` | `integer` | No | from config | Overrides `sandstorm.json` max_turns |
-| `timeout` | `integer` | No | `300` | Sandbox lifetime in seconds |
-| `files` | `object` | No | `null` | Files to upload (`{path: content}`) |
+Run an agent query.
 
-**Response:** `text/event-stream`
+**Request:**
+```json
+{
+  "prompt": "your task here",
+  "model": "sonnet",
+  "max_turns": 30,
+  "timeout": 300,
+  "files": {
+    "src/main.py": "def main():\n    pass",
+    "README.md": "# My Project"
+  },
+  "anthropic_api_key": "sk-ant-...",
+  "openrouter_api_key": "sk-or-..."
+}
+```
 
-### `GET /health`
+**Response:** Server-Sent Events (SSE) stream
 
-Returns `{"status": "ok"}`
+```
+data: {"type":"assistant_message","content":"I'll help you..."}
+data: {"type":"tool_use","name":"bash","command":"python main.py"}
+data: {"type":"result","success":true}
+```
 
-### SSE Event Types
+### GET /health
 
-| Type | Description |
-|------|-------------|
-| `system` | Session init -- tools, model, session ID |
-| `assistant` | Agent text + tool calls |
-| `user` | Tool execution results |
-| `result` | Final result with `total_cost_usd`, `num_turns`, and optional `structured_output` |
-| `error` | Error details (only on failure) |
+Health check endpoint.
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "sandbox_backend": "docker",
+  "api_keys": {
+    "anthropic": true,
+    "openrouter": false
+  }
+}
+```
 
 ## Client Examples
 
 ### Python
 
 ```python
-import httpx
-from httpx_sse import connect_sse
+import requests
 
-with httpx.Client() as client:
-    with connect_sse(
-        client, "POST",
-        "https://your-sandstorm-host/query",
-        json={
-            "prompt": "Scrape the top 50 HN stories, cluster by topic, save to output/hn.csv"
-        },
-    ) as events:
-        for sse in events.iter_sse():
-            print(sse.data)
+response = requests.post(
+    "http://localhost:8000/query",
+    json={"prompt": "Create hello.py and run it"},
+    stream=True
+)
+
+for line in response.iter_lines():
+    if line:
+        print(line.decode())
 ```
 
-### TypeScript
+### JavaScript
 
-```typescript
-const res = await fetch("https://your-sandstorm-host/query", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
+```javascript
+const response = await fetch('http://localhost:8000/query', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
   body: JSON.stringify({
-    prompt: "Fetch recent arxiv papers on LLM agents, extract findings, write a lit review",
-  }),
+    prompt: 'Create hello.py and run it'
+  })
 });
 
-const reader = res.body!.getReader();
-const decoder = new TextDecoder();
+const reader = response.body.getReader();
 while (true) {
-  const { done, value } = await reader.read();
+  const {done, value} = await reader.read();
   if (done) break;
-  console.log(decoder.decode(value));
+  console.log(new TextDecoder().decode(value));
 }
+```
+
+### cURL
+
+```bash
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Create hello.py and run it"}' \
+  --no-buffer
 ```
 
 ## Deployment
 
-Sandstorm is a stateless FastAPI app. Each request creates an independent E2B sandbox, runs the agent, and tears it down. No shared state, no sticky sessions, no coordination between requests. This means deploying for concurrent agent runs is trivial -- just add workers.
-
-### Production Server
-
-For development or simple deployments, use the built-in server:
+### Docker Compose
 
 ```bash
-ds serve --host 0.0.0.0 --port 8000
+# Set API keys in .env file
+echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
+
+# Build agent image
+docker build -f Dockerfile.agent -t sandstorm-agent:latest .
+
+# Start services
+docker-compose up -d
+
+# Query the API
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "test"}'
 ```
 
-For production with multiple workers, use [Gunicorn](https://gunicorn.org/) with uvicorn workers. Each worker handles multiple concurrent requests via async I/O:
+### Production
+
+For production deployments:
+
+1. **Build optimized image:**
+   ```dockerfile
+   # Multi-stage build to reduce size
+   FROM node:24-bookworm-slim AS builder
+   RUN npm install -g @anthropic-ai/claude-agent-sdk@0.2.42
+
+   FROM node:24-bookworm-slim
+   COPY --from=builder /usr/local/lib/node_modules /usr/local/lib/node_modules
+   # ... rest of setup
+   ```
+
+2. **Configure resource limits:**
+   ```yaml
+   # config/limits.yaml
+   max_concurrent_agents: 10
+   cpu_limit: "4"
+   memory_limit: "8gb"
+   session_timeout_seconds: 1800
+   ```
+
+3. **Use secrets management:**
+   ```bash
+   # Don't use environment variables in production
+   # Use Docker secrets or vault
+   docker secret create anthropic_key ./api_key.txt
+   ```
+
+4. **Enable monitoring:**
+   ```bash
+   # Monitor container metrics
+   docker stats
+
+   # View logs
+   docker-compose logs -f sandstorm-api
+   ```
+
+## Docker vs E2B
+
+Sandstorm-Docker supports both Docker (default) and E2B backends.
+
+### Comparison
+
+| Feature | Docker (Default) | E2B Cloud |
+|---------|-----------------|-----------|
+| **Cost** | Free (just API usage) | $0.05-0.20 per agent |
+| **Speed** | 1-2s cold start | 5-8s cold start |
+| **Latency** | Local (0ms) | Variable (network) |
+| **Setup** | Build image once | API key only |
+| **Dependencies** | Docker daemon | Internet connection |
+| **Privacy** | Fully local | Data sent to E2B |
+| **Scaling** | Hardware limited | API limited |
+
+### Using E2B (Optional)
+
+To use E2B cloud sandboxes instead of Docker:
 
 ```bash
-pip install gunicorn
-gunicorn sandstorm.main:app \
-  --worker-class uvicorn.workers.UvicornWorker \
-  --workers 4 \
-  --bind 0.0.0.0:8000 \
-  --timeout 600
+export SANDBOX_BACKEND=e2b
+export E2B_API_KEY=e2b_...
+export ANTHROPIC_API_KEY=sk-ant-...
+
+ds "your query"
 ```
 
-Set `--workers` based on your machine (2× CPU cores is a reasonable starting point). Set `--timeout` higher than your longest expected agent run.
+**When to use E2B:**
+- You don't want to manage Docker
+- You need sandboxes in specific regions
+- You're prototyping and want zero setup
+- You're already invested in E2B ecosystem
 
-### Running Many Agents Concurrently
-
-Fire as many requests as you want. Each one gets its own sandbox:
-
-```python
-import asyncio
-import httpx
-from httpx_sse import aconnect_sse
-
-
-async def run_agent(client: httpx.AsyncClient, prompt: str):
-    async with aconnect_sse(
-        client, "POST", "http://localhost:8000/query",
-        json={"prompt": prompt},
-    ) as events:
-        async for sse in events.aiter_sse():
-            print(sse.data)
-
-
-async def main():
-    prompts = [
-        "Scrape the top 50 YC companies and save as CSV",
-        "Analyze Python dependency security for requests==2.31.0",
-        "Fetch today's arxiv papers on LLM agents and write a summary",
-        "Build a SQLite DB of US national parks from NPS.gov",
-    ]
-    async with httpx.AsyncClient(timeout=600) as client:
-        await asyncio.gather(*[run_agent(client, p) for p in prompts])
-
-asyncio.run(main())
-```
-
-All four agents run simultaneously in isolated sandboxes. They can't see each other. When one finishes, its VM is destroyed -- the others keep running.
-
-### Scaling
-
-The Sandstorm server does almost no work itself -- it just proxies between your client and E2B. The real compute happens in E2B's cloud VMs. This means:
-
-- **Horizontal scaling** -- run multiple Sandstorm instances behind a load balancer. No shared state to worry about.
-- **Bottleneck is E2B** -- your concurrent sandbox limit depends on your [E2B plan](https://e2b.dev/pricing). The free tier allows a handful; paid plans scale higher.
-- **CPU/memory on the server is minimal** -- each request holds an open SSE connection and streams stdout. A single 2-core machine can comfortably handle dozens of concurrent agents.
-
-### Docker
-
-```dockerfile
-FROM python:3.12-slim
-WORKDIR /app
-COPY . .
-RUN pip install --no-cache-dir .  # or: pip install duvo-sandstorm
-EXPOSE 8000
-CMD ["ds", "serve", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-```bash
-docker build -t sandstorm .
-docker run -p 8000:8000 --env-file .env sandstorm
-```
-
-Deploy this container to any platform -- Railway, Fly.io, Cloud Run, ECS, Kubernetes. Since there's no state to persist, scaling up or down is just changing the replica count.
-
-### Vercel
-
-One-click deploy:
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Ftomascupr%2Fsandstorm&env=ANTHROPIC_API_KEY,E2B_API_KEY)
-
-The repo includes `vercel.json` and `api/index.py` pre-configured. Set `ANTHROPIC_API_KEY` and `E2B_API_KEY` as environment variables in your Vercel project settings.
-
-> **Note:** Vercel serverless functions have a maximum duration of 300s on Pro plans (10s on Hobby). For long-running agent tasks, use the Docker deployment or a dedicated server instead.
+**When to use Docker (default):**
+- You want fully local execution
+- You need to minimize costs
+- You have Docker expertise
+- You need custom sandbox images
+- You want faster cold starts
 
 ## Security
 
-- **Isolated execution** -- every request gets a fresh VM sandbox, destroyed after
-- **No server secrets** -- keys via `.env` or per-request, never stored server-side
-- **No shell injection** -- prompts and config written as files, never interpolated into commands
-- **Path traversal prevention** -- file upload paths are normalized and validated
-- **Structured errors** -- failures stream as SSE error events, not silent drops
-- **No persistence** -- nothing survives between requests
+### Docker Security
 
-> **Note:** The Anthropic API key is passed into the sandbox as an environment variable (the SDK requires it). The agent runs with `bypassPermissions` mode, so it has full access to the sandbox environment. Use per-request keys with spending limits for untrusted callers.
+Each container is hardened with:
 
-## Releasing
-
-New versions are published to [PyPI](https://pypi.org/project/duvo-sandstorm/) automatically when a GitHub release is created.
-
-1. Update the version in `pyproject.toml` and `src/sandstorm/__init__.py`
-2. Commit and push to `main`
-3. Create a GitHub release:
-
-```bash
-gh release create vX.Y.Z --title "vX.Y.Z" --generate-notes
+```python
+# From docker_impl.py
+container = client.containers.create(
+    image="sandstorm-agent:latest",
+    cap_drop=["ALL"],  # Drop all capabilities
+    cap_add=["CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID"],  # Add only essential
+    security_opt=["no-new-privileges"],  # Prevent privilege escalation
+    mem_limit="4gb",  # Memory limit
+    cpu_count=2,  # CPU limit
+    network_mode="bridge",  # Network isolation
+    remove=True  # Auto-cleanup
+)
 ```
 
-The [publish workflow](.github/workflows/publish.yml) builds and uploads to PyPI via [Trusted Publishing](https://docs.pypi.org/trusted-publishers/) -- no API tokens needed.
+### Best Practices
+
+1. **Don't commit secrets** - Use `.env` files (gitignored)
+2. **Rotate API keys** - Regularly rotate Anthropic/OpenRouter keys
+3. **Review agent output** - Monitor what agents are doing
+4. **Limit resources** - Set appropriate CPU/memory/timeout limits
+5. **Update regularly** - Keep base images and dependencies updated
+6. **Scan images** - `docker scan sandstorm-agent:latest`
+7. **Use read-only where possible** - Minimize container write access
+
+## Troubleshooting
+
+### Docker image not found
+
+```bash
+# Build the agent image
+docker build -f Dockerfile.agent -t sandstorm-agent:latest .
+```
+
+### Permission denied on Docker socket
+
+```bash
+# Linux: Add user to docker group
+sudo usermod -aG docker $USER
+newgrp docker
+
+# Or run with sudo (not recommended)
+sudo ds "your query"
+```
+
+### Containers not cleaning up
+
+```bash
+# Manual cleanup
+docker ps -a --filter "label=sandstorm.managed=true" -q | xargs docker rm -f
+
+# Check logs
+docker logs <container-id>
+```
+
+### Max concurrent agents error
+
+```
+RuntimeError: Max concurrent agents (5) reached
+```
+
+Edit `config/limits.yaml` to increase `max_concurrent_agents`, or wait for existing agents to complete.
+
+### Session timeout
+
+```
+Container exceeded 600s timeout, forcing cleanup
+```
+
+Edit `config/limits.yaml` to increase `session_timeout_seconds`:
+
+```yaml
+session_timeout_seconds: 1800  # 30 minutes
+```
+
+### Resource limits not working
+
+**Linux:** Ensure cgroups v2 is enabled:
+```bash
+docker info | grep "Cgroup Version"
+```
+
+**Mac/Windows:** Check Docker Desktop resource settings.
+
+## Development
+
+```bash
+# Clone repo
+git clone https://github.com/anishg-rohlik/sandstorm-docker.git
+cd sandstorm-docker
+
+# Install with uv
+uv sync
+
+# Build agent image
+docker build -f Dockerfile.agent -t sandstorm-agent:latest .
+
+# Run tests
+uv run pytest
+
+# Run in development mode
+uv run python -m sandstorm.cli serve --reload
+```
 
 ## License
 
-[MIT](LICENSE)
+MIT License - see [LICENSE](LICENSE) file.
+
+## Acknowledgments
+
+- Original [sandstorm](https://github.com/tomascupr/sandstorm) by [@tomascupr](https://github.com/tomascupr)
+- Built with [Claude Agent SDK](https://docs.anthropic.com/en/docs/agents-and-tools/claude-agent-sdk)
+- Inspired by the agent runtime at [duvo.ai](https://duvo.ai)
+
+## Contributing
+
+Contributions welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## Support
+
+- **Issues:** [GitHub Issues](https://github.com/anishg-rohlik/sandstorm-docker/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/anishg-rohlik/sandstorm-docker/discussions)
