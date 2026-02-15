@@ -1,56 +1,40 @@
 # Sandstorm-Docker
 
-Run AI agents in secure local Docker sandboxes. One command. Zero cloud dependencies.
+> **Docker fork of [Sandstorm](https://github.com/tomascupr/sandstorm)** — see the [upstream README](https://github.com/tomascupr/sandstorm#readme) for full project details and documentation.
 
-[![Claude Agent SDK](https://img.shields.io/badge/Claude_Agent_SDK-black?logo=anthropic)](https://docs.anthropic.com/en/docs/agents-and-tools/claude-agent-sdk)
-[![Docker](https://img.shields.io/badge/Docker-sandboxed-2496ED.svg?logo=docker)](https://www.docker.com)
-[![OpenRouter](https://img.shields.io/badge/OpenRouter-300%2B_models-6366f1.svg)](https://openrouter.ai)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+This fork replaces E2B cloud sandboxes with local Docker containers. Same agent runtime, same features, but fully local with no external sandbox dependencies.
 
-**Hundreds of AI agents running in parallel. Hours-long tasks. Tool use, file access, structured output — each in its own secure Docker container. Fully local. No cloud dependencies.**
+## Why Docker Sandboxes?
 
-```bash
-ds "Fetch all our webpages from git, analyze each for SEO, optimize them, and push the changes back"
-```
+**The problem:** E2B cloud sandboxes cost $0.05-0.20 per agent and require internet connectivity. For high-volume agent workloads, development environments, or air-gapped deployments, this doesn't work.
 
-That's it. Sandstorm-Docker wraps the [Claude Agent SDK](https://docs.anthropic.com/en/docs/agents-and-tools/claude-agent-sdk) in isolated Docker containers — the agent installs packages, fetches live data, generates files, and streams every step back via SSE. When it's done, the container is destroyed. Nothing persists. Nothing escapes.
+**This solution:** Run identical sandboxed environments using local Docker containers instead:
 
-**This is a public fork of [sandstorm](https://github.com/tomascupr/sandstorm) that replaces E2B cloud dependency with local Docker sandboxes.**
+- **Fully local** — no cloud sandbox service, no external dependencies
+- **Zero per-agent cost** — only pay for your LLM API usage
+- **Faster cold starts** — 1-2s vs 5-8s with E2B
+- **Better for development** — easier debugging, no external API dependencies, full container inspection
+- **Configurable limits** — set max concurrent agents, CPU, memory, and timeouts via [config/limits.yaml](config/limits.yaml)
 
-### Why Sandstorm-Docker?
+Everything else from Sandstorm works the same: Claude Agent SDK, structured output, file uploads, streaming, MCP servers, OpenRouter support.
 
-Most companies want to use AI agents but hit the same wall: cloud dependencies, costs, and complexity. Sandstorm-Docker removes all three. It's a fork of the agent runtime from [duvo.ai](https://duvo.ai) — adapted for fully local deployment.
-
-- **Fully Local** -- no cloud sandbox service required, runs entirely on your machine or server
-- **Free** -- no per-agent costs (E2B charges $0.05-0.20 per agent), just your Anthropic API usage
-- **Fast** -- 1-2s cold start vs 5-8s with E2B cloud sandboxes
-- **Resource Limits** -- configure max concurrent agents, CPU, memory, and session timeouts
-- **Any model via OpenRouter** -- swap in DeepSeek R1, Qwen 3, Kimi K2, or any of 300+ models
-- **Full agent power** -- Bash, Read, Write, Edit, Glob, Grep, WebSearch, WebFetch -- all enabled
-- **Safe by design** -- every request gets a fresh container with security hardening
-- **Real-time streaming** -- watch the agent work step-by-step via SSE
-- **Configure once, query forever** -- drop a `sandstorm.json` for structured output, subagents, MCP servers
-- **File uploads** -- send code, data, or configs for the agent to work with
-- **E2B Compatible** -- optional fallback to E2B cloud sandboxes if needed
-
-### Get Started
+## Quick Start
 
 ```bash
 # Install
 pip install duvo-sandstorm
 
-# Build agent Docker image (one-time)
+# Build the agent Docker image (one-time setup)
 docker build -f Dockerfile.agent -t sandstorm-agent:latest .
 
-# Set API key (no E2B needed!)
+# Set your API key
 export ANTHROPIC_API_KEY=sk-ant-...
 
-# Run your first agent
-ds "Find the top 10 trending Python repos on GitHub and summarize each"
+# Run an agent
+ds "analyze the top 10 Python repos on GitHub and summarize each"
 ```
 
-If Sandstorm-Docker is useful, consider giving it a [star](https://github.com/anishg-rohlik/sandstorm-docker) — it helps others find it.
+For all other usage details, see the [upstream Sandstorm documentation](https://github.com/tomascupr/sandstorm#readme).
 
 ## Table of Contents
 
