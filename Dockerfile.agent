@@ -15,15 +15,15 @@ RUN apt-get update && apt-get install -y \
 # Create agent runner directory with proper permissions
 RUN mkdir -p /opt/agent-runner && chmod 777 /opt/agent-runner
 
-# Install Claude Agent SDK globally at specific version to match E2B template
+# Install Claude Agent SDK locally at specific version to match E2B template
 # Version pinned to match build_template.py
 WORKDIR /opt/agent-runner
 RUN npm init -y && \
-    npm install -g @anthropic-ai/claude-agent-sdk@0.2.42
+    npm install @anthropic-ai/claude-agent-sdk@0.2.42
 
 # Create user and workspace
 RUN useradd -m -s /bin/bash user && \
-    mkdir -p /home/user && \
+    mkdir -p /home/user/.claude/debug && \
     chown -R user:user /home/user
 
 # Set working directory

@@ -137,13 +137,13 @@ async def run_agent_in_sandbox(
     if request.openrouter_api_key:
         sandbox_envs["ANTHROPIC_AUTH_TOKEN"] = request.openrouter_api_key
 
-    # When using a custom base URL with auth token (e.g. OpenRouter), the SDK
-    # must NOT receive a real ANTHROPIC_API_KEY — otherwise it validates model
-    # names against Anthropic's API and rejects non-Claude models.
+    # When using a custom base URL with auth token (e.g. OpenRouter, LiteLLM),
+    # use the auth token as the API key for the SDK to work properly.
+    # LiteLLM proxies typically accept the key in either Authorization or x-api-key header.
     if sandbox_envs.get("ANTHROPIC_BASE_URL") and sandbox_envs.get(
         "ANTHROPIC_AUTH_TOKEN"
     ):
-        sandbox_envs["ANTHROPIC_API_KEY"] = ""
+        sandbox_envs["ANTHROPIC_API_KEY"] = sandbox_envs["ANTHROPIC_AUTH_TOKEN"]
 
     # Eagerly read GCP credentials file (TOCTOU fix: read now, upload later)
     gcp_creds_content = None
@@ -188,6 +188,7 @@ async def run_agent_in_sandbox(
         settings = {
             "permissions": {"allow": [], "deny": []},
             "env": {"CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"},
+            "debug": {"enabled": False},  # Disable debug logging to avoid permission issues
         }
         await sandbox.mkdir("/home/user/.claude")
         await sandbox.upload_file(

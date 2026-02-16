@@ -9,7 +9,9 @@ build/
 CLAUDE.md
 *.lock
 .vercel
+docs/
 
 # GCP service account keys
 gcp-*.json
 .DS_Store
+.claude/settings.local.json

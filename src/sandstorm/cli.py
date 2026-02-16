@@ -128,7 +128,7 @@ def query(
     )
 
     from .models import QueryRequest
-    from .sandbox import run_agent_in_sandbox
+    from .orchestrator import run_agent_in_sandbox
 
     files: dict[str, str] | None = None
     if file_paths:

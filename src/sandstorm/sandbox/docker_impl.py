@@ -90,9 +90,9 @@ class DockerSandbox(SandboxBase):
                     cap_drop=["ALL"],
                     cap_add=["CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID"],
                     security_opt=["no-new-privileges"],
-                    # Cleanup
-                    remove=True,  # Auto-remove on stop
-                    labels={"sandstorm.managed": "true"}
+                    # Cleanup - removed 'remove=True' as it's not supported by create(), only run()
+                    labels={"sandstorm.managed": "true"},
+                    auto_remove=True  # Auto-remove on stop (correct parameter name)
                 )
             )
 
@@ -126,10 +126,11 @@ class DockerSandbox(SandboxBase):
             raise RuntimeError("Container not created")
 
         loop = asyncio.get_event_loop()
+        # Create directory and set ownership to user
         result = await loop.run_in_executor(
             None,
             lambda: self.container.exec_run(
-                f"mkdir -p {shlex.quote(remote_path)}",
+                f"mkdir -p {shlex.quote(remote_path)} && chown user:user {shlex.quote(remote_path)}",
                 user="root"  # Ensure permissions
             )
         )
@@ -189,11 +190,12 @@ class DockerSandbox(SandboxBase):
 
         loop = asyncio.get_event_loop()
 
-        # Execute command with streaming
+        # Execute command with streaming (using shell to support cd and other shell features)
+        shell_command = f"/bin/bash -c {shlex.quote(f'cd {cwd} && {command}')}"
         exec_instance = await loop.run_in_executor(
             None,
             lambda: self.container.exec_run(
-                f"cd {shlex.quote(cwd)} && {command}",
+                shell_command,
                 stream=True,
                 demux=True,  # Separate stdout/stderr
                 user="user"

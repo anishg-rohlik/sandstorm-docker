@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 
 from .models import QueryRequest
-from .sandbox import run_agent_in_sandbox
+from .orchestrator import run_agent_in_sandbox
 
 load_dotenv()
 

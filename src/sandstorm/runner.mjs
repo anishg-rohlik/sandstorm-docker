@@ -13,6 +13,14 @@ import { fileURLToPath } from "url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const config = JSON.parse(readFileSync(join(__dirname, "agent_config.json"), "utf-8"));
 
+// Debug: Log environment and configuration
+process.stderr.write(`[RUNNER DEBUG] API Key: ${process.env.ANTHROPIC_API_KEY ? 'SET (' + process.env.ANTHROPIC_API_KEY.substring(0, 15) + '...)' : 'NOT SET'}\n`);
+process.stderr.write(`[RUNNER DEBUG] Auth Token: ${process.env.ANTHROPIC_AUTH_TOKEN ? 'SET (' + process.env.ANTHROPIC_AUTH_TOKEN.substring(0, 15) + '...)' : 'NOT SET'}\n`);
+process.stderr.write(`[RUNNER DEBUG] Base URL: ${process.env.ANTHROPIC_BASE_URL || 'NOT SET'}\n`);
+process.stderr.write(`[RUNNER DEBUG] Model: ${config.model || 'NOT SET'}\n`);
+process.stderr.write(`[RUNNER DEBUG] Max Turns: ${config.max_turns || 'NOT SET'}\n`);
+process.stderr.write(`[RUNNER DEBUG] Prompt: ${config.prompt.substring(0, 80)}...\n`);
+
 const options = {
   cwd: config.cwd || "/home/user",
   permissionMode: "bypassPermissions",
@@ -28,8 +36,12 @@ if (config.mcp_servers) options.mcpServers = config.mcp_servers;
 if (config.output_format) options.outputFormat = config.output_format;
 if (config.agents) options.agents = config.agents;
 
+process.stderr.write(`[RUNNER DEBUG] Starting query with options: ${JSON.stringify({model: options.model, maxTurns: options.maxTurns})}\n`);
+
 try {
+  process.stderr.write(`[RUNNER DEBUG] Entering query loop...\n`);
   for await (const message of query({ prompt: config.prompt, options })) {
+    process.stderr.write(`[RUNNER DEBUG] Received message type: ${message.type}\n`);
     process.stdout.write(JSON.stringify(message) + "\n");
 
     // Break on terminal result to avoid hanging
